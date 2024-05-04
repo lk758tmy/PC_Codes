@@ -55,7 +55,7 @@ In each layer, half of the processes will receive first
 	for(int i=0;i<numProcess;i++) printf("%d ",*(recvMsg+i));
 	printf("\n");
 	
+	free(sendMsg);	free(recvMsg);
 	MPI_Finalize();
 	return 0;
 }
-//mpirun -np 8 ./homework
