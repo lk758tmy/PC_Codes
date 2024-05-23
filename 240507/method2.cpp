@@ -1,4 +1,3 @@
-//Poission Equation on [0,1]x[0,1]
 #include <mpi/mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +6,7 @@
 using namespace std;
 using namespace std::chrono;
 const int npX=4,npY=4,intervalsX=100,intervalsY=100;
-const int itmax=8000;
+const int itmax=4000;
 const double tol=1e-6;
 int main(int argc, char *argv[]){
 	int numProcess,myRank,idX,idY,lX,lY;
@@ -67,25 +66,23 @@ int main(int argc, char *argv[]){
 	d=0.5*hx*hx*hy*hy/(hx*hx+hy*hy);
 	dx=d/(hx*hx);
 	dy=d/(hy*hy);
-    for(int i=1;i<lX-1;i++){
-        for(int j=1;j<lY-1;j++){
+    for(int i=0;i<lX;i++)
+        for(int j=0;j<lY;j++)
             *(f+i*lY+j)=d;
-        }
-    }
  
 	//boundary condition
     if(idX==0)
         for(int j=0;j<lY;j++)
-            *(u+j)=*(ut+j);
+            *(u+j)=*(unew+j)=*(ut+j);
     if(idX==npX-1)
         for(int j=0;j<lY;j++)
-			*(u+(lX-1)*lY+j)=*(ut+(lX-1)*lY+j);
+			*(u+(lX-1)*lY+j)=*(unew+(lX-1)*lY+j)=*(ut+(lX-1)*lY+j);
     if(idY==0)
         for(int i=0;i<lX;i++)
-			*(u+i*lY)=*(ut+i*lY);
+			*(u+i*lY)=*(unew+i*lY)=*(ut+i*lY);
     if(idY==npY-1)
         for(int i=0;i<lX;i++)
-            *(u+(i+1)*lY-1)=*(ut+(i+1)*lY-1);
+            *(u+(i+1)*lY-1)=*(unew+(i+1)*lY-1)=*(ut+(i+1)*lY-1);
 
     tStart=steady_clock::now();
 
@@ -110,26 +107,30 @@ int main(int argc, char *argv[]){
     MPI_Type_commit(&borderY);
 
 	//begin iteration loop
-    for(int iter=1;iter<=itmax;iter++){
-        for(int i=1;i<lX-1;i++)	//Red
+    for(int iter=0;iter<(itmax*2);iter++){
+        if(iter%2==1) //Red
+		for(int i=1;i<lX-1;i++)
         for(int j=1;j<lY-1;j++)
-		if((startColour+i+j+iter)%2==0)
+		if((startColour+i+j+iter/2)%2==0)
 	        *(unew+i*lY+j)=*(f+i*lY+j)+dy*(*(u+i*lY+j+1)+*(u+i*lY+j-1))
 								+dx*(*(u+(i+1)*lY+j)+*(u+(i-1)*lY+j));
+		else *(unew+i*lY+j)=*(u+i*lY+j);
 		
-		for(int i=1;i<lX-1;i++)	//Black
+		if(iter%2==0) //Black
+		for(int i=1;i<lX-1;i++)
 		for(int j=1;j<lY-1;j++)
-		if((startColour+i+j+iter)%2==1)
-			*(unew+i*lY+j)=*(f+i*lY+j)+dy*(*(unew+i*lY+j+1)+*(unew+i*lY+j-1))
-								+dx*(*(unew+(i+1)*lY+j)+*(unew+(i-1)*lY+j));	
+		if((startColour+i+j+iter/2)%2==1)
+			*(unew+i*lY+j)=*(f+i*lY+j)+dy*(*(u+i*lY+j+1)+*(u+i*lY+j-1))
+								+dx*(*(u+(i+1)*lY+j)+*(u+(i-1)*lY+j));
+		else *(unew+i*lY+j)=*(u+i*lY+j);
 
 		//only check residual once in every 25 loops, otherwise too slow!
-		if(iter%25!=0) goto skipResidualCheck;
+		if(iter%50!=49) goto skipResidualCheck;
         res=0.0;
         for(int i=1;i<lX-1;i++)
         for(int j=1;j<lY-1;j++){
             rtmp=*(unew+i*lY+j)-*(u+i*lY+j);
-			//unewâ‰?f+dx...+dy...) --> (unew-u)â‰?f-u+dx...+dy...)=residual
+			//unewâ‰ˆ(f+dx...+dy...) --> (unew-u)â‰ˆ(f-u+dx...+dy...)=residual
 			//Equals to the residual of last loop approximately.
             if(res<fabs(rtmp)) res=fabs(rtmp);
         }
@@ -137,7 +138,7 @@ int main(int argc, char *argv[]){
 
         MPI_Allreduce(&rtmp,&res,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
         if(myRank==0)
-			printf("iter=%d,residualâ‰?.4e\n",iter,res);  
+			printf("iter=%d,residualâ‰ˆ%.4e\n",(iter+1)/2,res);  
 		if(res<tol) break;
 		
 		skipResidualCheck:
@@ -161,7 +162,7 @@ int main(int argc, char *argv[]){
 		//u(lx-2,1:ly-1) -> right, u(lx-1,1:ly-1) <- right
         MPI_Sendrecv(u+lY*(lX-2)+1,1,borderY,right,111,
                      u+lY*(lX-1)+1,1,borderY,right,111,
-                     MPI_COMM_WORLD,&status);
+                     MPI_COMM_WORLD,&status);	
     }
 
     tEnd=steady_clock::now();
