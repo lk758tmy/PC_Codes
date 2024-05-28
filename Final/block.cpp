@@ -1,4 +1,4 @@
-#include <mpi/mpi.h>
+#include "mpi.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <chrono>
@@ -25,8 +25,10 @@ int main(int argc,char *argv[]){
 	else if(numProcess==6) npX=2,npY=3;
 	else if(numProcess==8) npX=2,npY=4;
 	else if(numProcess==9) npX=3,npY=3;
+	else if(numProcess==12) npX=3,npY=4;
+	else if(numProcess==16) npX=npY=4;
 	else{
-		if(myRank==0) printf("Error: np should be 4/6/8/9.\n");
+		if(myRank==0) printf("Error: np should be 4/6/8/9/12.\n");
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 	/*npX=(int)sqrt(numProcess); npY=npX;
@@ -149,5 +151,3 @@ int main(int argc,char *argv[]){
 	MPI_Finalize();
 	return 0;
 }
-
-//计算结果还不太对,且仅在npy!=npx时出现？
